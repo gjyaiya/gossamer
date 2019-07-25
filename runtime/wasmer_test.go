@@ -596,13 +596,24 @@ func TestExt_blake2_256_enumerated_trie_root(t *testing.T) {
 	}
 }
 
-func TestExecCoreAuthorities(t *testing.T) {
-	r, err := newRuntime(t)
+func TestExecCoreInitializeBlock(t *testing.T) {
+	runtime, err := newRuntime(t)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ret, err := r.Exec("Core_authorities", 1, 1)
+
+	mem := runtime.vm.Memory.Data()
+
+	// construct expected trie
+	data := []byte {127, 134, 78, 24, 227, 221, 139, 88, 56, 99, 16, 210, 254, 9, 25, 238, 242, 124, 110, 85, 133, 100, 183, 246, 127, 34, 217, 157, 32, 245, 135, 187}
+
+
+
+	// return value will be saved at `result` in memory
+	copy(mem[0:len(data)], data)
+
+	ret, err := runtime.Exec("Core_initialize_block", 1, int32(len(data)))
 	if err != nil {
 		t.Fatal(err)
 	}
