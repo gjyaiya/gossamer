@@ -595,3 +595,23 @@ func TestExt_blake2_256_enumerated_trie_root(t *testing.T) {
 		t.Error("did not get expected trie")
 	}
 }
+
+func TestExecCoreAuthorities(t *testing.T) {
+	r, err := newRuntime(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ret, err := r.Exec("Core_authorities", 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log(ret)
+
+	res, err := decodeToInterface(ret, &Version{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("res", res)
+}
