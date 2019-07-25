@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"io"
+	"math/big"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"testing"
 
 	common "github.com/ChainSafe/gossamer/common"
+	scale "github.com/ChainSafe/gossamer/codec"
 	trie "github.com/ChainSafe/gossamer/trie"
 	ed25519 "golang.org/x/crypto/ed25519"
 )
@@ -594,35 +596,87 @@ func TestExt_blake2_256_enumerated_trie_root(t *testing.T) {
 	if !bytes.Equal(mem[result:result+32], expectedHash[:]) {
 		t.Error("did not get expected trie")
 	}
+
 }
 
-func TestExecCoreInitializeBlock(t *testing.T) {
-	runtime, err := newRuntime(t)
+func TestCallCoreInitializeBlock(t *testing.T) {
+	r, err := newRuntime(t)
 	if err != nil {
 		t.Fatal(err)
+	} else if r == nil {
+		t.Fatal("did not create new VM")
 	}
 
+	mem := r.vm.Memory.Data()
 
-	mem := runtime.vm.Memory.Data()
+	data := []byte { 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+	var offset int32 = 16
+	var length int32 = int32(len(data))
+	copy(mem[offset:offset+length], data)
 
-	// construct expected trie
-	data := []byte {127, 134, 78, 24, 227, 221, 139, 88, 56, 99, 16, 210, 254, 9, 25, 238, 242, 124, 110, 85, 133, 100, 183, 246, 127, 34, 217, 157, 32, 245, 135, 187}
-
-
-
-	// return value will be saved at `result` in memory
-	copy(mem[0:len(data)], data)
-
-	ret, err := runtime.Exec("Core_initialize_block", 1, int32(len(data)))
+	ret, err := r.Exec("Core_initialize_block", offset, length)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Log(ret)
+}
 
-	res, err := decodeToInterface(ret, &Version{})
+func TestExecCoreInitializeBlock(t *testing.T) {
+	ph, err := common.HexToHash("0xdcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b")
+	if err != nil {
+		t.Fatalf("Fail when decoding parent hash: %s", err)
+	}
+	sr, err := common.HexToHash("0x89d0e979afb54e4ba041e942c252fefd83b94b4c8e71821bdf663347fe169eaa")
+	if err != nil {
+		t.Fatalf("Fail when decoding state root: %s", err)
+	}
+	er, err := common.HexToHash("0xf6ae75ee1f0895eebee8bc19f5b68fea145ffee1102d00c83950e5a70f907490")
+	if err != nil {
+		t.Fatalf("Fail when decoding extrinsics root: %s", err)
+	}
+
+	header := common.BlockHeader{
+		ParentHash: ph,
+		Number: big.NewInt(1),
+		StateRoot: sr,
+		ExtrinsicsRoot: er,
+		Digest: nil,
+	}
+
+	buffer := bytes.Buffer{}
+	se := scale.Encoder{ &buffer}
+
+	t.Log("header numFields:", reflect.ValueOf(header).NumField())
+	t.Log("header:", header)
+	encHeader, err := se.Encode(header)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log("res", res)
+
+	output := buffer.Bytes()
+
+	t.Log("scale output: ", output)
+	t.Log("bytes encoded:", encHeader)
+
+	r, err := newRuntime(t)
+	if err != nil {
+		t.Fatal(err)
+	} else if r == nil {
+		t.Fatal("did not create new VM")
+	}
+
+	mem := r.vm.Memory.Data()
+
+	var offset int32 = 16
+	var length int32 = int32(len(output))
+	t.Log("length:", length)
+	copy(mem[offset:offset+length], output)
+
+	res, err := r.Exec("Core_initialize_block", offset, length)
+	if err != nil {
+		t.Fatalf("could not exec wasm runtime: %s", err)
+	}
+
+	t.Logf("%v\n", res)
 }

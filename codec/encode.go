@@ -20,9 +20,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"github.com/ChainSafe/gossamer/common"
 	"io"
 	"math/big"
 	"reflect"
+
+	log "github.com/ChainSafe/log15"
 )
 
 // Encoder is a wrapping around io.Writer
@@ -225,7 +228,6 @@ func (se *Encoder) encodeTuple(t interface{}) (bytesEncoded int, err error) {
 		if err != nil {
 			return bytesEncoded, err
 		}
-
 		bytesEncoded += n
 	}
 
@@ -248,6 +250,7 @@ func (se *Encoder) encodeIntegerElements(arr []int) (bytesEncoded int, err error
 // encodeArray encodes an interface where the underlying type is an array or slice
 // it writes the encoded length of the Array to the Encoder, then encodes and writes each value in the Array
 func (se *Encoder) encodeArray(t interface{}) (bytesEncoded int, err error) {
+	log.Debug("encodeArray", "type:",reflect.TypeOf(t))
 	var n int
 	switch arr := t.(type) {
 	case []int:
@@ -285,6 +288,10 @@ func (se *Encoder) encodeArray(t interface{}) (bytesEncoded int, err error) {
 			n, err = se.encodeArray(elem)
 			bytesEncoded += n
 		}
+
+	case common.Hash:
+		n, err = se.encodeByteArray(arr[:])
+		bytesEncoded += n
 	}
 
 	return bytesEncoded, err
