@@ -609,9 +609,10 @@ func TestCallCoreInitializeBlock(t *testing.T) {
 
 	mem := r.vm.Memory.Data()
 
-	data := []byte { 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+	data := []byte { 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	var offset int32 = 16
 	var length int32 = int32(len(data))
+	t.Log("length:", length)
 	copy(mem[offset:offset+length], data)
 
 	ret, err := r.Exec("Core_initialize_block", offset, length)
@@ -627,6 +628,7 @@ func TestExecCoreInitializeBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fail when decoding parent hash: %s", err)
 	}
+
 	sr, err := common.HexToHash("0x89d0e979afb54e4ba041e942c252fefd83b94b4c8e71821bdf663347fe169eaa")
 	if err != nil {
 		t.Fatalf("Fail when decoding state root: %s", err)
@@ -636,29 +638,17 @@ func TestExecCoreInitializeBlock(t *testing.T) {
 		t.Fatalf("Fail when decoding extrinsics root: %s", err)
 	}
 
-	header := common.BlockHeader{
-		ParentHash: ph,
-		Number: big.NewInt(1),
-		StateRoot: sr,
-		ExtrinsicsRoot: er,
-		Digest: nil,
-	}
 
-	buffer := bytes.Buffer{}
-	se := scale.Encoder{ &buffer}
+	blockNumber, err := scale.Encode(big.NewInt(1))
+	// append parts together to make header
+	headerArray := append(ph[:], blockNumber[:]...)
+	headerArray = append(headerArray[:], sr[:]...)
+	headerArray = append(headerArray[:], er[:]...)
+	headerArray = append(headerArray[:], 0)
 
-	t.Log("header numFields:", reflect.ValueOf(header).NumField())
-	t.Log("header:", header)
-	encHeader, err := se.Encode(header)
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Log("headerArray:", headerArray)
 
-	output := buffer.Bytes()
-
-	t.Log("scale output: ", output)
-	t.Log("bytes encoded:", encHeader)
-
+	// build runtime, load memory with headerArray and call Core_initialize_block
 	r, err := newRuntime(t)
 	if err != nil {
 		t.Fatal(err)
@@ -669,9 +659,9 @@ func TestExecCoreInitializeBlock(t *testing.T) {
 	mem := r.vm.Memory.Data()
 
 	var offset int32 = 16
-	var length int32 = int32(len(output))
+	var length int32 = int32(len(headerArray))
 	t.Log("length:", length)
-	copy(mem[offset:offset+length], output)
+	copy(mem[offset:offset+length], headerArray)
 
 	res, err := r.Exec("Core_initialize_block", offset, length)
 	if err != nil {
