@@ -13,7 +13,7 @@ package runtime
 // extern void ext_twox_128(void *context, int32_t data, int32_t len, int32_t out);
 // extern int32_t ext_get_allocated_storage(void *context, int32_t keyData, int32_t keyLen, int32_t writtenOut);
 // extern void ext_storage_root(void *context, int32_t resultPtr);
-// extern int32_t ext_storage_changes_root(void *context, int32_t a, int32_t b, int32_t c);
+// extern int32_t ext_storage_changes_root(void *context, int32_t a, int32_t b, int64_t c, int32_t d);
 // extern void ext_clear_prefix(void *context, int32_t prefixData, int32_t prefixLen);
 // extern int32_t ext_sr25519_verify(void *context, int32_t msgData, int32_t msgLen, int32_t sigData, int32_t pubkeyData);
 // extern int32_t ext_ed25519_verify(void *context, int32_t msgData, int32_t msgLen, int32_t sigData, int32_t pubkeyData);
@@ -134,7 +134,7 @@ func ext_storage_root(context unsafe.Pointer, resultPtr int32) {
 }
 
 //export ext_storage_changes_root
-func ext_storage_changes_root(context unsafe.Pointer, a, b, c int32) int32 {
+func ext_storage_changes_root(context unsafe.Pointer, a int32, b int32, c int64, d int32) int32 {
 	log.Debug("[ext_storage_changes_root] executing...")
 	return 0
 }

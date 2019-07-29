@@ -644,7 +644,7 @@ func TestExecCoreInitializeBlock(t *testing.T) {
 	headerArray := append(ph[:], blockNumber[:]...)
 	headerArray = append(headerArray[:], sr[:]...)
 	headerArray = append(headerArray[:], er[:]...)
-	headerArray = append(headerArray[:], 0)
+	headerArray = append(headerArray[:], 1)
 
 	t.Log("headerArray:", headerArray)
 
@@ -669,4 +669,28 @@ func TestExecCoreInitializeBlock(t *testing.T) {
 	}
 
 	t.Logf("%v\n", res)
+}
+
+func TestCallCoreExecuteBlock(t *testing.T) {
+	r, err := newRuntime(t)
+	if err != nil {
+		t.Fatal(err)
+	} else if r == nil {
+		t.Fatal("did not create new VM")
+	}
+
+	mem := r.vm.Memory.Data()
+
+	data := []byte { 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 4, 35, 160, 39, 249, 170, 232, 224, 184, 38, 97, 176, 199, 160, 30, 41, 249, 9, 31, 230, 145, 223, 109, 245, 137, 245, 140, 195, 9, 141, 86, 33, 105, 76, 251, 225, 102, 44, 138, 37, 198, 176, 150, 140, 54, 30, 40, 111, 44, 150, 191, 0, 150, 159, 116, 194, 105, 237, 40, 151, 193, 137, 48, 146, 72, 4, 2, 137, 234, 186, 251, 12, 195, 122, 76, 48, 197, 243, 184, 43, 37, 38, 156, 14, 152, 199, 45, 231, 45, 48, 207, 43, 124, 171, 166, 178, 1, 151, 30, 8, 16, 2, 2, 0, 168, 69, 2, 130, 255, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125, 66, 251, 56, 14, 35, 129, 84, 210, 216, 173, 65, 218, 124, 89, 94, 207, 219, 182, 211, 127, 217, 137, 225, 170, 181, 25, 10, 115, 39, 131, 239, 89, 157, 29, 234, 168, 153, 186, 135, 40, 24, 69, 23, 54, 18, 102, 237, 190, 55, 175, 113, 138, 108, 182, 253, 85, 36, 41, 140, 53, 146, 26, 13, 9, 7, 0, 0, 0, 5, 0, 255, 142, 175, 4, 21, 22, 135, 115, 99, 38, 201, 254, 161, 126, 37, 252, 82, 135, 97, 54, 147, 201, 18, 144, 156, 178, 38, 170, 71, 148, 242, 106, 72, 15, 0, 64, 243, 112, 131, 131, 24 }
+	var offset int32 = 16
+	var length int32 = int32(len(data))
+	t.Log("length:", length)
+	copy(mem[offset:offset+length], data)
+
+	ret, err := r.Exec("Core_execute_block", offset, length)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("ret:", ret)
 }
