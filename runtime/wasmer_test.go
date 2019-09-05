@@ -81,7 +81,7 @@ func TestExecVersion(t *testing.T) {
 		Spec_name:         []byte("polkadot"),
 		Impl_name:         []byte("parity-polkadot"),
 		Authoring_version: 1,
-		Spec_version:      1000,
+		Spec_version:      109,
 		Impl_version:      0,
 	}
 
