@@ -45,42 +45,42 @@ var mutex = sync.Mutex{}
 
 //export ext_print_num
 func ext_print_num(context unsafe.Pointer, data C.int64_t) {
-	log.Debug("[ext_print_num] executing...")
+//	log.Debug("[ext_print_num] executing...")
 	log.Debug("[ext_print_num]", "message", fmt.Sprintf("%d", data))
 }
 
 //export ext_malloc
 func ext_malloc(context unsafe.Pointer, size int32) int32 {
-	log.Debug("[ext_malloc] executing...")
+//	log.Debug("[ext_malloc] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 
 	mutex.Lock()
 	runtimeCtx := registry[*(*int)(instanceContext.Data())]
 	mutex.Unlock()
-	log.Debug("[ext_malloc]", "context", *(*int)(instanceContext.Data()))
-	log.Debug("[ext_malloc]", "runtimeCtx.allocator", runtimeCtx.allocator)
+//	log.Debug("[ext_malloc]", "context", *(*int)(instanceContext.Data()))
+//	log.Debug("[ext_malloc]", "runtimeCtx.allocator", runtimeCtx.allocator)
 
 	// Allocate memory
 	res, err := runtimeCtx.allocator.Allocate(uint32(size))
 	if err != nil {
 		log.Error("[ext_malloc]", "Error:", err)
 	}
-	log.Debug("[ext_malloc]", "pointer", res)
-	log.Debug("[ext_malloc]", "heap_size after allocation", runtimeCtx.allocator.totalSize)
+//	log.Debug("[ext_malloc]", "pointer", res)
+//	log.Debug("[ext_malloc]", "heap_size after allocation", runtimeCtx.allocator.totalSize)
 	return int32(res)
 }
 
 //export ext_free
 func ext_free(context unsafe.Pointer, addr int32) {
-	log.Debug("[ext_free] executing...")
-	log.Debug("[ext_free]", "addr", addr)
+//	log.Debug("[ext_free] executing...")
+//	log.Debug("[ext_free]", "addr", addr)
 	instanceContext := wasm.IntoInstanceContext(context)
 
 	mutex.Lock()
 	runtimeCtx := registry[*(*int)(instanceContext.Data())]
 	mutex.Unlock()
 
-	log.Debug("[ext_free]", "runtimeCtx.allocator", runtimeCtx.allocator)
+//	log.Debug("[ext_free]", "runtimeCtx.allocator", runtimeCtx.allocator)
 
 	// Deallocate memory
 	err := runtimeCtx.allocator.Deallocate(uint32(addr))
@@ -94,7 +94,7 @@ func ext_free(context unsafe.Pointer, addr int32) {
 // prints string located in memory at location `offset` with length `size`
 //export ext_print_utf8
 func ext_print_utf8(context unsafe.Pointer, utf8_data, utf8_len int32) {
-	log.Debug("[ext_print_utf8] executing...")
+	//log.Debug("[ext_print_utf8] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 	log.Debug("[ext_print_utf8]", "message", fmt.Sprintf("%s", memory[utf8_data:utf8_data+utf8_len]))
@@ -103,7 +103,7 @@ func ext_print_utf8(context unsafe.Pointer, utf8_data, utf8_len int32) {
 // prints hex formatted bytes located in memory at location `offset` with length `size`
 //export ext_print_hex
 func ext_print_hex(context unsafe.Pointer, offset, size int32) {
-	log.Debug("[ext_print_hex] executing...")
+	//log.Debug("[ext_print_hex] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 	log.Debug("[ext_print_hex]", "message", fmt.Sprintf("%x", memory[offset:offset+size]))
@@ -129,7 +129,8 @@ func ext_get_storage_into(context unsafe.Pointer, keyData, keyLen, valueData, va
 		ret := 1<<32 - 1
 		return int32(ret)
 	}
-
+	log.Debug("[ext_set_storage_into]", "key", key, "val", val)
+	log.Debug("[ext_set_storage_into]", "valueData", valueData, "valueLen", valueLen)
 	if len(val) > int(valueLen) {
 		log.Error("[ext_get_storage_into]", "error", "value exceeds allocated buffer length")
 		return 0
@@ -143,7 +144,7 @@ func ext_get_storage_into(context unsafe.Pointer, keyData, keyLen, valueData, va
 // with length `valueLen` into the storage trie
 //export ext_set_storage
 func ext_set_storage(context unsafe.Pointer, keyData, keyLen, valueData, valueLen int32) {
-	log.Debug("[ext_set_storage] executing...")
+	//log.Debug("[ext_set_storage] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
@@ -238,7 +239,7 @@ func ext_get_allocated_storage(context unsafe.Pointer, keyData, keyLen, writtenO
 // deletes the trie entry with key at memory location `keyData` with length `keyLen`
 //export ext_clear_storage
 func ext_clear_storage(context unsafe.Pointer, keyData, keyLen int32) {
-	log.Debug("[ext_sr25519_verify] executing...")
+	log.Debug("[ext_clear_storage] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 
@@ -329,10 +330,10 @@ func ext_blake2_256(context unsafe.Pointer, data, length, out int32) {
 
 //export ext_twox_128
 func ext_twox_128(context unsafe.Pointer, data, len, out int32) {
-	log.Debug("[ext_twox_128] executing...")
+//	log.Debug("[ext_twox_128] executing...")
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
-	log.Debug("[ext_twox_128]", "value", memory[data:data+len])
+//	log.Debug("[ext_twox_128]", "value", memory[data:data+len])
 
 	// compute xxHash64 twice with seeds 0 and 1 applied on given byte array
 	h0 := xxhash.NewS64(0) // create xxHash with 0 seed
@@ -341,7 +342,7 @@ func ext_twox_128(context unsafe.Pointer, data, len, out int32) {
 		log.Error("[ext_twox_128]", "error", err)
 	}
 	res0 := h0.Sum64()
-	log.Debug("[ext_twox_128]", "xxH64(0) of value", res0)
+//	log.Debug("[ext_twox_128]", "xxH64(0) of value", res0)
 	hash0 := make([]byte, 8)
 	binary.LittleEndian.PutUint64(hash0, uint64(res0))
 
@@ -351,7 +352,7 @@ func ext_twox_128(context unsafe.Pointer, data, len, out int32) {
 		log.Error("[ext_twox_128]", "error", err)
 	}
 	res1 := h1.Sum64()
-	log.Debug("[ext_twox_128]", "xxH64(1) of value", res1)
+//	log.Debug("[ext_twox_128]", "xxH64(1) of value", res1)
 	hash1 := make([]byte, 8)
 	binary.LittleEndian.PutUint64(hash1, uint64(res1))
 
