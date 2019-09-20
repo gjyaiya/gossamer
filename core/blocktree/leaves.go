@@ -37,8 +37,8 @@ func (ls leafMap) DeepestLeaf() *node {
 	max := big.NewInt(-1)
 	var dLeaf *node
 	for _, n := range ls {
-		if max.Cmp(n.depth) < 0 {
-			max = n.depth
+		if max.Cmp(n.number) < 0 {
+			max = n.number
 			dLeaf = n
 		}
 	}

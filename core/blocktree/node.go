@@ -28,9 +28,8 @@ import (
 type node struct {
 	hash     common.Hash // Block hash
 	parent   *node       // Parent node
-	number   *big.Int    // Block number
+	number   *big.Int    // Block number & depth within the tree
 	children []*node     // Nodes of children blocks
-	depth    *big.Int    // Depth within the tree
 }
 
 // addChild appends node to n's list of children
@@ -40,7 +39,7 @@ func (n *node) addChild(node *node) {
 
 // String returns stringified hash and depth of node
 func (n *node) String() string {
-	return fmt.Sprintf("{h: %s, d: %s}", n.hash.String(), n.depth)
+	return fmt.Sprintf("{h: %s, d: %s}", n.hash.String(), n.number)
 }
 
 // createTree adds all the nodes children to the existing printable tree.
