@@ -30,17 +30,19 @@ import (
 
 type Hash = common.Hash
 
-// BlockTree represents the current state with all possible blocks
+// BlockTree represents the current state with all possible blocks after the current finalized block
 type BlockTree struct {
-	head            *node
-	leaves          leafMap
-	finalizedBlocks []*node
+	genesis			*node
+	lastFinalized	*node
+	leaves          leafMap	
+	//TODO: see if this is nessesary or if calculating subchain from genesis to lastFinalized instead would be sufficient	
+	finalizedBlocks []*node	
 	Db              *polkadb.BlockDB
 }
 
 // NewBlockTreeFromGenesis initializes a blocktree with a genesis block.
 func NewBlockTreeFromGenesis(genesis core.Block, db *polkadb.BlockDB) *BlockTree {
-	head := &node{
+	genesis := &node{
 		hash:     genesis.Header.Hash,
 		number:   genesis.Header.Number,
 		parent:   nil,
@@ -48,11 +50,44 @@ func NewBlockTreeFromGenesis(genesis core.Block, db *polkadb.BlockDB) *BlockTree
 		depth:    big.NewInt(0),
 	}
 	return &BlockTree{
-		head:            head,
-		finalizedBlocks: []*node{},
-		leaves:          leafMap{head.hash: head},
-		Db:              db,
+		genesis:            genesis,
+		lastFinalized:		nil,
+		finalizedBlocks: 	[]*node{},
+		leaves:          	leafMap{genesis.hash: genesis},
+		Db:              	db,
 	}
+}
+
+// VerifyChain verifies the chain passed in by Grandpa to be finalized
+// this assumes the hashes in the chain are in order
+// very inefficient
+// TODO: Can remove this function, useful for testing for now
+func (bt *BlockTree) VerifyChain(chain []*hash{}){
+	head := chain[0];
+	headNode := bt.getNode(head);
+	tail := chain[-1];
+	tailNode := bt.getNode(tail);
+	
+	subchain()
+}
+
+// need function to verify chain is in order and inherits from each other.
+// FinalizeChain finalizes blocks 
+func (bt *BlockTree) FinalizeChain(chain []*hash{}){
+	if !lastFinalized {
+		for	_, h := range chain {
+			if n := bt.getNode(h); n != nil {
+				FinalizeBlock(node)
+			}
+		}
+	}
+
+}
+
+// FinalizeBlock finalizes the block associated with the node
+func (bt *BlockTree) FinalizeBlock(node *node){
+	for node 
+
 }
 
 // AddBlock inserts the block as child of its parent node
