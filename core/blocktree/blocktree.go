@@ -59,16 +59,14 @@ func NewBlockTreeFromGenesis(genesis core.Block, db *polkadb.BlockDB) *BlockTree
 }
 
 // VerifyChain verifies the chain passed in by Grandpa to be finalized
-// this assumes the hashes in the chain are in order
-// very inefficient
+// this assumes the hashes in chain are in order of finalization
 // TODO: Can remove this function, useful for testing for now
 func (bt *BlockTree) VerifyChain(chain []*hash{}){
 	head := chain[0];
 	headNode := bt.getNode(head);
 	tail := chain[-1];
 	tailNode := bt.getNode(tail);
-	
-	subchain()
+		
 }
 
 // need function to verify chain is in order and inherits from each other.
