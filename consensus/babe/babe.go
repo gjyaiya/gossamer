@@ -21,8 +21,11 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"time"
 
+	"github.com/ChainSafe/gossamer/codec"
 	tx "github.com/ChainSafe/gossamer/common/transaction"
+	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/runtime"
 )
 
@@ -42,6 +45,18 @@ type Session struct {
 	epochThreshold *big.Int
 
 	txQueue *tx.PriorityQueue
+}
+
+const MAX_BLOCK_SIZE uint = 4*1024*1024 + 512
+
+type BlockInherentsData struct {
+	timestamp uint64
+	babeslot  uint64
+}
+
+type Slot struct {
+	slotStart    uint64
+	slotDuration uint64
 }
 
 // NewSession returns a new Babe session using the provided VRF keys and runtime
@@ -142,4 +157,86 @@ func calculateThreshold(C1, C2, authorityIndex uint64, authorityWeights []uint64
 
 	// (1 << 128) * (1 - (1-c)^(w_k/sum(w_i)))
 	return q.Mul(q, p_rat.Num()).Div(q, p_rat.Denom()), nil
+}
+
+// Block Build
+func (b *Session) buildBlock(chainBest types.Block, slot Slot) (*types.Block, error) {
+	// Assign the parent block's hash
+	parentBlockHeader := chainBest.Header
+	parentBlockHash, err := b.blockHashFromIdFromRuntime(parentBlockHeader.Number.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	parentBlockHeader.Hash = *parentBlockHash
+
+	var newBlock types.Block
+	// Assign values to headers of the new block
+	newBlock.Header.ParentHash = parentBlockHeader.Hash
+	newBlockNum := big.NewInt(1)
+	newBlock.Header.Number = newBlockNum.Add(newBlockNum, parentBlockHeader.Number)
+
+	// Initialize block through runtime
+	encodedHeader, err := codec.Encode(newBlock.Header)
+	if err != nil {
+		return nil, err
+	}
+	err = b.initializeBlockFromRuntime(encodedHeader)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get Inherent Extrinsics through runtime
+	//TODO: figure out where to get timstap0 & babeslot
+	blockInherentsData := BlockInherentsData{timestamp: b.config.EpochLength, babeslot: slot}
+	encodedBlockInherentsData, err := codec.Encode(blockInherentsData)
+	if err != nil {
+		return nil, err
+	}
+	extrinsicsArray, err := b.inherentExtrinsicsFromRuntime(encodedBlockInherentsData)
+
+	// Loop through inherents in the queue and apply them to the block through runtime
+	var blockBody *types.BlockBody
+	for _, extrinsic := range *extrinsicsArray {
+		blockBody, err = b.applyExtrinsicFromRuntime(extrinsic)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Add Extrinsics to the block through runtime until block is full
+	var extrinsic types.Extrinsic
+	for !BlockIsFull(*blockBody) && !EndOfSlot(slot) {
+		extrinsic = b.NextReadyExtrinsic()
+		blockBody, err = b.applyExtrinsicFromRuntime(extrinsic)
+		if err != nil {
+			return nil, err
+		}
+
+		if !BlockIsFull(*blockBody) {
+			// Drop first extrinsic in queue
+			b.txQueue.Pop()
+		}
+	}
+
+	// Finalize block through runtime
+	blockHeaderPointer, err := b.finalizeBlockFromRuntime(extrinsic)
+	if err != nil {
+		return nil, err
+	}
+	newBlock.Header = *blockHeaderPointer
+	newBlock.Body = *blockBody
+	return &newBlock, nil
+}
+
+func BlockIsFull(blockBody types.BlockBody) bool {
+	return uint(len(blockBody)) == MAX_BLOCK_SIZE
+}
+
+func EndOfSlot(slot Slot) bool {
+	return uint64(time.Now().Unix()) < slot.slotStart+slot.slotDuration
+}
+
+func (b *Session) NextReadyExtrinsic() types.Extrinsic {
+	transaction := b.txQueue.Pop()
+	return *transaction.Extrinsic
 }
