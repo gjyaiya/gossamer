@@ -36,6 +36,8 @@ func (cm ConnManager) Notifee() net.Notifiee {
 	nb := new(net.NotifyBundle)
 	nb.OpenedStreamF = OpenedStream
 	nb.ClosedStreamF = ClosedStream
+	nb.ConnectedF = Connected
+	nb.DisconnectedF = Disconnected
 	return nb
 }
 
@@ -58,4 +60,13 @@ func ClosedStream(n net.Network, s net.Stream) {
 	if string(s.Protocol()) == ProtocolPrefix {
 		log.Info("closed stream", "peer", s.Conn().RemotePeer(), "protocol", s.Protocol())
 	}
+}
+
+func Connected(n net.Network, c net.Conn) {
+	log.Debug("Connection established", "peer", c.RemotePeer().String())
+
+}
+
+func Disconnected(n net.Network, c net.Conn) {
+	log.Debug("Connection disconnected", "peer", c.RemotePeer().String())
 }
