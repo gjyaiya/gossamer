@@ -35,8 +35,8 @@ type StateDB struct {
 // This does not actually write to the db, just to the batch writer
 // Commit must be called afterwards to finish writing to the db
 func (t *Trie) WriteToDB() error {
-	t.db.Batch = t.db.Db.NewBatch()
-	return t.writeToDB(t.root)
+	t.Database.Batch = t.Database.Db.NewBatch()
+	return t.writeToDB(t.NodeRoot)
 }
 
 // writeToDB recursively attempts to write each node in the trie to the db batch writer
@@ -74,14 +74,14 @@ func (t *Trie) writeNodeToDB(n node) (bool, error) {
 		return false, err
 	}
 
-	hash, err := t.db.Hasher.Hash(n)
+	hash, err := t.Database.Hasher.Hash(n)
 	if err != nil {
 		return false, err
 	}
 
-	t.db.Lock.Lock()
-	err = t.db.Batch.Put(hash[:], encRoot)
-	t.db.Lock.Unlock()
+	t.Database.Lock.Lock()
+	err = t.Database.Batch.Put(hash[:], encRoot)
+	t.Database.Lock.Unlock()
 
 	n.setDirty(false)
 	return true, err
@@ -89,5 +89,5 @@ func (t *Trie) writeNodeToDB(n node) (bool, error) {
 
 // Commit writes the contents of the db's batch writer to the db
 func (t *Trie) Commit() error {
-	return t.db.Batch.Write()
+	return t.Database.Batch.Write()
 }

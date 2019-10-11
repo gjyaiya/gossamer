@@ -39,11 +39,10 @@ type BlockHeader struct {
 	ExtrinsicsRoot common.Hash
 	Digest         []byte // any additional block info eg. logs, seal
 	// TODO: Not part of spec, can potentially remove
-	Hash common.Hash
 }
 
 // BlockBody is the extrinsics inside a state block
-type BlockBody []byte
+type BlockBody []Extrinsic
 
 /// BlockData is stored within the BlockDB
 type BlockData struct {

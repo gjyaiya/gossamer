@@ -101,9 +101,10 @@ func (r *Runtime) Load(location, length int32) []byte {
 }
 
 func (r *Runtime) Exec(function string, data, len int32) ([]byte, error) {
+	fmt.Println("FN: ", function)
 	runtimeFunc, ok := r.vm.Exports[function]
 	if !ok {
-		return nil, errors.New("could not find exported function")
+		return nil, errors.New("could not find exported function (" + function + ")")
 	}
 	res, err := runtimeFunc(data, len)
 	if err != nil {

@@ -27,39 +27,39 @@ import (
 // The zero value is an empty trie with no database.
 // Use NewTrie to create a trie that sits on top of a database.
 type Trie struct {
-	db   *StateDB
-	root node
+	Database *StateDB
+	NodeRoot node
 }
 
 // NewEmptyTrie creates a trie with a nil root and merkleRoot
 func NewEmptyTrie(db *StateDB) *Trie {
 	return &Trie{
-		db:   db,
-		root: nil,
+		Database: db,
+		NodeRoot: nil,
 	}
 }
 
 // NewTrie creates a trie with an existing root node from db
 func NewTrie(db *StateDB, root node) *Trie {
 	return &Trie{
-		db:   db,
-		root: root,
+		Database: db,
+		NodeRoot: root,
 	}
 }
 
 // Root returns the root of the trie
 func (t *Trie) Root() node {
-	return t.root
+	return t.NodeRoot
 }
 
 // Db returns the trie's underlying database
 func (t *Trie) Db() *StateDB {
-	return t.db
+	return t.Database
 }
 
 // Encode returns the encoded root of the trie
 func (t *Trie) Encode() ([]byte, error) {
-	return Encode(t.root)
+	return Encode(t.NodeRoot)
 }
 
 // Hash returns the hashed root of the trie
@@ -74,7 +74,7 @@ func (t *Trie) Hash() (common.Hash, error) {
 
 // Entries returns all the key-value pairs in the trie as a map of keys to values
 func (t *Trie) Entries() map[string][]byte {
-	return t.entries(t.root, nil, make(map[string][]byte))
+	return t.entries(t.NodeRoot, nil, make(map[string][]byte))
 }
 
 func (t *Trie) entries(current node, prefix []byte, kv map[string][]byte) map[string][]byte {
@@ -108,16 +108,16 @@ func (t *Trie) tryPut(key, value []byte) (err error) {
 	var n node
 
 	if len(value) > 0 {
-		_, n, err = t.insert(t.root, k, &leaf{key: nil, value: value, dirty: true})
+		_, n, err = t.insert(t.NodeRoot, k, &leaf{key: nil, value: value, dirty: true})
 	} else {
-		_, n, err = t.delete(t.root, k)
+		_, n, err = t.delete(t.NodeRoot, k)
 	}
 
 	if err != nil {
 		return err
 	}
 
-	t.root = n
+	t.NodeRoot = n
 	return nil
 }
 
@@ -259,7 +259,7 @@ func (t *Trie) getLeaf(key []byte) (value *leaf, err error) {
 func (t *Trie) tryGet(key []byte) (value *leaf, err error) {
 	k := keyToNibbles(key)
 
-	value, err = t.retrieve(t.root, k)
+	value, err = t.retrieve(t.NodeRoot, k)
 	return value, err
 }
 
@@ -294,11 +294,11 @@ func (t *Trie) retrieve(parent node, key []byte) (value *leaf, err error) {
 // Delete removes any existing value for key from the trie.
 func (t *Trie) Delete(key []byte) error {
 	k := keyToNibbles(key)
-	_, n, err := t.delete(t.root, k)
+	_, n, err := t.delete(t.NodeRoot, k)
 	if err != nil {
 		return err
 	}
-	t.root = n
+	t.NodeRoot = n
 	return nil
 }
 

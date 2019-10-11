@@ -23,11 +23,11 @@ import (
 // Print prints the trie through pre-order traversal
 func (t *Trie) Print() {
 	fmt.Println("printing trie...")
-	t.print(t.root, nil, false)
+	t.print(t.NodeRoot, nil, false)
 }
 
 func (t *Trie) PrintEncoding() {
-	t.print(t.root, nil, true)
+	t.print(t.NodeRoot, nil, true)
 }
 
 func (t *Trie) print(current node, prefix []byte, withEncoding bool) {
