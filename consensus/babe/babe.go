@@ -18,6 +18,7 @@ package babe
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -29,6 +30,7 @@ import (
 	tx "github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/core/types"
 	"github.com/ChainSafe/gossamer/runtime"
+	log "github.com/ChainSafe/log15"
 )
 
 // Session contains the VRF keys for the validator
@@ -44,9 +46,9 @@ type Session struct {
 	// authorities []VrfPublicKey
 	authorityWeights []uint64
 
-	epochThreshold *big.Int
-
-	txQueue *tx.PriorityQueue
+	epochThreshold *big.Int // validator threshold for this epoch
+	txQueue        *tx.PriorityQueue
+	isProducer     map[uint64]bool // whether we are a block producer at a slot
 }
 
 const MAX_BLOCK_SIZE uint = 4*1024*1024 + 512
@@ -58,7 +60,35 @@ func NewSession(pubkey VrfPublicKey, privkey VrfPrivateKey, rt *runtime.Runtime)
 		vrfPrivateKey: privkey,
 		rt:            rt,
 		txQueue:       new(tx.PriorityQueue),
+		isProducer:    make(map[uint64]bool),
 	}
+}
+
+func (b *Session) Start() error {
+	var i uint64 = 0
+	var err error
+	for ; i < b.config.EpochLength; i++ {
+		b.isProducer[i], err = b.runLottery(i)
+		if err != nil {
+			return fmt.Errorf("BABE: error running slot lottery at slot %d: error %s", i, err)
+		}
+	}
+
+	go func() {
+		// TODO: we might not actually be starting at slot 0, need to run median algorithm here
+		var currentSlot uint64 = 0
+
+		for ; currentSlot < b.config.EpochLength; currentSlot++ {
+			if b.isProducer[currentSlot] {
+				// TODO: build block
+				log.Info("BABE: building block", "slot", currentSlot)
+			}
+
+			time.Sleep(time.Millisecond * time.Duration(b.config.SlotDuration))
+		}
+	}()
+
+	return nil
 }
 
 // PushToTxQueue adds a ValidTransaction to BABE's transaction queue
@@ -91,7 +121,10 @@ func (b *Session) setEpochThreshold() error {
 // runs the slot lottery for a specific slot
 // returns true if validator is authorized to produce a block for that slot, false otherwise
 func (b *Session) runLottery(slot uint64) (bool, error) {
-	output, err := b.vrfSign(slot)
+	slotBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(slotBytes, slot)
+	vrfInput := append(slotBytes, b.config.Randomness)
+	output, err := b.vrfSign(vrfInput)
 	if err != nil {
 		return false, err
 	}
@@ -107,9 +140,8 @@ func (b *Session) runLottery(slot uint64) (bool, error) {
 	return output_int.Cmp(b.epochThreshold) > 0, nil
 }
 
-func (b *Session) vrfSign(slot uint64) ([]byte, error) {
+func (b *Session) vrfSign(input []byte) ([]byte, error) {
 	// TOOD: return VRF output and proof
-	// sign b.epochData.Randomness and slot
 	out := make([]byte, 32)
 	_, err := rand.Read(out)
 	return out, err

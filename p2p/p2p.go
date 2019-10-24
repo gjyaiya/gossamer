@@ -19,26 +19,22 @@ package p2p
 import (
 	"bufio"
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
-	"io"
-	mrand "math/rand"
 	"time"
 
 	"github.com/ChainSafe/gossamer/common"
+	"github.com/ChainSafe/gossamer/internal/services"
 	log "github.com/ChainSafe/log15"
-
 	ds "github.com/ipfs/go-datastore"
 	dsync "github.com/ipfs/go-datastore/sync"
-	libp2p "github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p"
 	core "github.com/libp2p/go-libp2p-core"
-	crypto "github.com/libp2p/go-libp2p-core/crypto"
-	host "github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/host"
 	net "github.com/libp2p/go-libp2p-core/network"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peer"
 	kaddht "github.com/libp2p/go-libp2p-kad-dht"
-	discovery "github.com/libp2p/go-libp2p/p2p/discovery"
+	"github.com/libp2p/go-libp2p/p2p/discovery"
 	rhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -46,30 +42,27 @@ import (
 const ProtocolPrefix = "/substrate/dot/2"
 const mdnsPeriod = time.Minute
 
+var _ services.Service = &Service{}
+
 // Service describes a p2p service, including host and dht
 type Service struct {
-	ctx            context.Context
-	host           core.Host
-	hostAddr       ma.Multiaddr
-	dht            *kaddht.IpfsDHT
-	dhtConfig      kaddht.BootstrapConfig
-	bootstrapNodes []peer.AddrInfo
-	mdns           discovery.Service
-	msgChan        chan<- Message
-	noBootstrap    bool
-}
-
-// Config is used to configure a p2p service
-type Config struct {
-	BootstrapNodes []string
-	Port           int
-	RandSeed       int64
-	NoBootstrap    bool
-	NoMdns         bool
+	ctx              context.Context
+	host             core.Host
+	hostAddr         ma.Multiaddr
+	dht              *kaddht.IpfsDHT
+	dhtConfig        kaddht.BootstrapConfig
+	bootnodes        []peer.AddrInfo
+	mdns             discovery.Service
+	msgChan          chan<- []byte
+	noBootstrap      bool
+	blockReqRec      map[string]bool
+	blockRespRec     map[string]bool
+	blockAnnounceRec map[string]bool
+	txMessageRec     map[string]bool
 }
 
 // NewService creates a new p2p.Service using the service config. It initializes the host and dht
-func NewService(conf *Config, msgChan chan<- Message) (*Service, error) {
+func NewService(conf *Config, msgChan chan<- []byte) (*Service, error) {
 	ctx := context.Background()
 	opts, err := conf.buildOpts()
 	if err != nil {
@@ -110,16 +103,21 @@ func NewService(conf *Config, msgChan chan<- Message) (*Service, error) {
 
 	bootstrapNodes, err := stringsToPeerInfos(conf.BootstrapNodes)
 	s := &Service{
-		ctx:            ctx,
-		host:           h,
-		hostAddr:       hostAddr,
-		dht:            dht,
-		dhtConfig:      dhtConfig,
-		bootstrapNodes: bootstrapNodes,
-		noBootstrap:    conf.NoBootstrap,
-		mdns:           mdns,
-		msgChan:        msgChan,
+		ctx:         ctx,
+		host:        h,
+		hostAddr:    hostAddr,
+		dht:         dht,
+		dhtConfig:   dhtConfig,
+		bootnodes:   bootstrapNodes,
+		noBootstrap: conf.NoBootstrap,
+		mdns:        mdns,
+		msgChan:     msgChan,
 	}
+
+	s.blockReqRec = make(map[string]bool)
+	s.blockRespRec = make(map[string]bool)
+	s.blockAnnounceRec = make(map[string]bool)
+	s.txMessageRec = make(map[string]bool)
 
 	h.SetStreamHandler(ProtocolPrefix, s.handleStream)
 
@@ -127,82 +125,101 @@ func NewService(conf *Config, msgChan chan<- Message) (*Service, error) {
 }
 
 // Start begins the p2p Service, including discovery
-func (s *Service) Start() <-chan error {
-	e := make(chan error)
-	go s.start(e)
-	return e
-}
-
-// start begins the p2p Service, including discovery. start does not terminate once called.
-func (s *Service) start(e chan error) {
-	if len(s.bootstrapNodes) == 0 && !s.noBootstrap {
-		e <- errors.New("no peers to bootstrap to")
+func (s *Service) Start() error {
+	if len(s.bootnodes) == 0 && !s.noBootstrap {
+		return errors.New("no peers to bootstrap to")
 	}
 
-	// this is in a go func that loops every minute due to the fact that we appear
-	// to get kicked off the network after a few minutes
-	// this will likely be resolved once we send messages back to the network
-	go func() {
-		for {
-			if !s.noBootstrap {
-				// connect to the bootstrap nodes
-				err := s.bootstrapConnect()
-				if err != nil {
-					e <- err
-				}
-			}
+	s.bootstrap()
 
-			err := s.dht.Bootstrap(s.ctx)
-			if err != nil {
-				e <- err
-			}
-			time.Sleep(time.Minute)
-		}
-	}()
-
-	// Now we can build a full multiaddress to reach this host
-	// by encapsulating both addresses:
 	addrs := s.host.Addrs()
+	log.Info("You can be reached on the following addresses:")
 	for _, addr := range addrs {
-		log.Info("address can be reached", "hostAddr", addr.Encapsulate(s.hostAddr))
+		fmt.Println("\t" + addr.Encapsulate(s.hostAddr).String())
 	}
 
-	log.Info("listening for connections...")
-	e <- nil
+	log.Info("Listening for connections...")
+
+	return nil
 }
 
 // Stop stops the p2p service
-func (s *Service) Stop() <-chan error {
-	e := make(chan error)
-
+func (s *Service) Stop() error {
 	//Stop the host & IpfsDHT
 	err := s.host.Close()
 	if err != nil {
-		e <- err
+		return err
 	}
 
 	err = s.dht.Close()
 	if err != nil {
-		e <- err
+		return err
 	}
 
-	return e
+	if s.msgChan != nil {
+		close(s.msgChan)
+	}
+
+	return nil
+}
+
+// Broadcast sends a message to all peers
+func (s *Service) Broadcast(msg Message) (err error) {
+	//If the node hasn't received the message yet, add it to a list of received messages & rebroadcast it
+	msgType := msg.GetType()
+	switch msgType {
+	case BlockRequestMsgType:
+		if s.blockReqRec[msg.Id()] {
+			return nil
+		}
+		s.blockReqRec[msg.Id()] = true
+	case BlockResponseMsgType:
+		if s.blockRespRec[msg.Id()] {
+			return nil
+		}
+		s.blockRespRec[msg.Id()] = true
+	case BlockAnnounceMsgType:
+		if s.blockAnnounceRec[msg.Id()] {
+			return nil
+		}
+		s.blockAnnounceRec[msg.Id()] = true
+	case TransactionMsgType:
+		if s.txMessageRec[msg.Id()] {
+			return nil
+		}
+		s.txMessageRec[msg.Id()] = true
+	default:
+		log.Error("Invalid message type", "type", msgType)
+		return nil
+	}
+
+	encodedMsg, err := msg.Encode()
+	if err != nil {
+		return err
+	}
+
+	for _, peers := range s.host.Network().Peers() {
+		addrInfo := s.dht.FindLocal(peers)
+		err = s.Send(addrInfo, encodedMsg)
+	}
+
+	return err
 }
 
 // Send sends a message to a specific peer
 func (s *Service) Send(peer core.PeerAddrInfo, msg []byte) (err error) {
-	log.Debug("sending message", "peer", peer.ID, "msg", fmt.Sprintf("0x%x", msg))
+	log.Debug("sending message", "to", peer.ID)
 
 	stream := s.getExistingStream(peer.ID)
 	if stream == nil {
 		stream, err = s.host.NewStream(s.ctx, peer.ID, ProtocolPrefix)
-		log.Debug("opening new stream ", "peer", peer.ID)
+		log.Debug("opening new stream ", "to", peer.ID)
 		if err != nil {
 			log.Error("failed to open stream", "error", err)
 			return err
 		}
 	} else {
-		log.Debug("using existing stream", "peer", peer.ID)
+		log.Debug("using existing stream", "to", peer.ID)
 	}
 
 	// Write length of message, and then message
@@ -269,53 +286,6 @@ func (s *Service) PeerCount() int {
 	return len(peers)
 }
 
-func (sc *Config) buildOpts() ([]libp2p.Option, error) {
-	ip := "0.0.0.0"
-
-	priv, err := generateKey(sc.RandSeed)
-	if err != nil {
-		return nil, err
-	}
-
-	addr, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ip, sc.Port))
-	if err != nil {
-		return nil, err
-	}
-
-	connMgr := ConnManager{}
-
-	return []libp2p.Option{
-		libp2p.ListenAddrs(addr),
-		libp2p.DisableRelay(),
-		libp2p.Identity(priv),
-		libp2p.NATPortMap(),
-		libp2p.Ping(true),
-		libp2p.ConnectionManager(connMgr),
-	}, nil
-}
-
-// generateKey generates a libp2p private key which is used for secure messaging
-func generateKey(seed int64) (crypto.PrivKey, error) {
-	// If the seed is zero, use real cryptographic randomness. Otherwise, use a
-	// deterministic randomness source to make generated keys stay the same
-	// across multiple runs
-	var r io.Reader
-	if seed == 0 {
-		r = rand.Reader
-	} else {
-		r = mrand.New(mrand.NewSource(seed))
-	}
-
-	// Generate a key pair for this host. We will use it at least
-	// to obtain a valid host ID.
-	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, r)
-	if err != nil {
-		return nil, err
-	}
-
-	return priv, nil
-}
-
 // getExistingStream gets an existing stream for a peer that uses ProtocolPrefix
 func (s *Service) getExistingStream(p peer.ID) net.Stream {
 	conns := s.host.Network().ConnsToPeer(p)
@@ -360,7 +330,7 @@ func (s *Service) handleStream(stream net.Stream) {
 	}
 
 	// read entire message
-	rawMsg, err := rw.Reader.Peek(int(length) - 1)
+	rawMsg, err := rw.Reader.Peek(int(length))
 	if err != nil {
 		log.Error("failed to read message", "err", err)
 		return
@@ -377,7 +347,16 @@ func (s *Service) handleStream(stream net.Stream) {
 
 	log.Debug("got message", "peer", stream.Conn().RemotePeer(), "type", msgType, "msg", msg.String())
 
-	s.msgChan <- msg
+	s.msgChan <- rawMsg
+
+	// Rebroadcast all messages except for status messages
+	if msg.GetType() != StatusMsgType {
+		err = s.Broadcast(msg)
+		if err != nil {
+			log.Debug("failed to broadcast message: ", err)
+			return
+		}
+	}
 }
 
 // Peers returns connected peers
