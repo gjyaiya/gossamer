@@ -22,15 +22,15 @@ import (
 
 // String returns the trie stringified through pre-order traversal
 func (t *Trie) String() string {
-	return t.string("", t.root, nil, false)
+	return t.string("", t.root, nil, 0, false)
 }
 
 // StringWithEncoding returns the trie stringified as well as the encoding of each node
 func (t *Trie) StringWithEncoding() string {
-	return t.string("", t.root, nil, true)
+	return t.string("", t.root, nil, 0, true)
 }
 
-func (t *Trie) string(str string, current node, prefix []byte, withEncoding bool) string {
+func (t *Trie) string(str string, current node, prefix []byte, index byte, withEncoding bool) string {
 	h, err := NewHasher()
 	if err != nil {
 		return ""
@@ -51,16 +51,16 @@ func (t *Trie) string(str string, current node, prefix []byte, withEncoding bool
 
 	switch c := current.(type) {
 	case *branch:
-		str += fmt.Sprintf("branch prefix %x key %x children %b value %x\n", nibblesToKeyLE(prefix), nibblesToKey(c.key), c.childrenBitmap(), c.value)
+		str += fmt.Sprintf("branch prefix %v key %v children %b value %x\n", prefix, c.key, c.childrenBitmap(), c.value)
 		if withEncoding {
 			str += fmt.Sprintf("branch encoding %x branch hash %x", encoding, hash)
 		}
 
 		for i, child := range c.children {
-			str = t.string(str, child, append(append(prefix, byte(i)), c.key...), withEncoding)
+			str = t.string(str, child, append(prefix, c.key...), byte(i), withEncoding)
 		}
 	case *leaf:
-		str += fmt.Sprintf("leaf prefix %x key %x value %x\n", nibblesToKeyLE(prefix), nibblesToKeyLE(c.key), c.value)
+		str += fmt.Sprintf("leaf prefix %v index %d key %v value %x\n", prefix, index, c.key, c.value)
 		if withEncoding {
 			str += fmt.Sprintf("leaf encoding %x leaf hash %x", encoding, hash)
 		}
