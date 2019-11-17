@@ -17,10 +17,14 @@
 package core
 
 import (
+	"bytes"
+	// "fmt"
+
 	"github.com/ChainSafe/gossamer/internal/services"
 	log "github.com/ChainSafe/log15"
 
 	"github.com/ChainSafe/gossamer/common"
+	"github.com/ChainSafe/gossamer/common/optional"
 	tx "github.com/ChainSafe/gossamer/common/transaction"
 	"github.com/ChainSafe/gossamer/consensus/babe"
 	"github.com/ChainSafe/gossamer/core/types"
@@ -55,14 +59,14 @@ func NewService(rt *runtime.Runtime, b *babe.Session, recChan <-chan []byte, sen
 func (s *Service) Start() error {
 	e := make(chan error)
 	go s.start(e)
-	return <-e
+	return <- e
 }
 
 func (s *Service) start(e chan error) {
 	e <- nil
 
 	for {
-		msg, ok := <-s.recChan
+		msg, ok := <- s.recChan
 		if !ok {
 			log.Warn("core service message watcher", "error", "channel closed")
 			break
@@ -79,11 +83,16 @@ func (s *Service) start(e chan error) {
 			}
 			e <- nil
 		case p2p.BlockAnnounceMsgType:
-			// get extrinsics by sending BlockRequest message
-			// process block
+			// process block announce
+			err := s.ProcessBlockAnnounce(msg[1:])
+			if err != nil {
+				log.Error("core service", "error", err)
+				e <- err
+			}
+			e <- nil
 		case p2p.BlockResponseMsgType:
-			// process response
-			err := s.ProcessBlock(msg[1:])
+			// process block response
+			err := s.ProcessBlockResponse(msg[1:])
 			if err != nil {
 				log.Error("core service", "error", err)
 				e <- err
@@ -124,9 +133,58 @@ func (s *Service) ProcessTransaction(e types.Extrinsic) error {
 	return nil
 }
 
-// ProcessBlock attempts to add a block to the chain by calling `core_execute_block`
+// ProcessBlockAnnounce attempts to get block body required for `core_execute_block` and creates BlockResponse
+func (s *Service) ProcessBlockAnnounce(b []byte) error {
+
+	// TODO:
+
+	// 1. Decode block message
+	// 2. Request block message body
+	// 3. Create block response
+
+	// Should this be handled in the p2p package?
+
+	// fmt.Println("\n*** BlockAnnounceMessage ***\n", b, " \n ")
+
+	mba := new(p2p.BlockAnnounceMessage)
+	buf := new(bytes.Buffer)
+
+	buf.Write(b)
+	mba.Decode(buf)
+
+	// fmt.Println("\n*** Decoded BlockAnnounceMessage ***\n", mba, " \n ")
+
+	bh := common.NewHash(b)
+
+	mbr := &p2p.BlockRequestMessage{
+		ID:            1,	// TODO: use increment or random number
+		RequestedData: 2,
+		StartingBlock: b,
+		EndBlockHash:  optional.NewHash(true, bh),
+		Direction:     1,
+		Max:           optional.NewUint32(true, 1),
+	}
+
+	// fmt.Println("\n*** BlockRequestMessage ***\n", mbr, " \n ")
+
+	msg, err := mbr.Encode()
+	if err != nil {
+		log.Error("ProcessBlockAnnounce", "error", err)
+		return err
+	}
+
+	// fmt.Println("\n*** Encoded BlockRequestMessage ***\n", msg, " \n ")
+
+	err = s.validateBlock(msg)
+	return err
+}
+
+// ProcessBlockResponse attempts to add a block to the chain by calling `core_execute_block`
 // if the block is validated, it is stored in the block DB and becomes part of the canonical chain
-func (s *Service) ProcessBlock(b []byte) error {
+func (s *Service) ProcessBlockResponse(b []byte) error {
+
+	// TODO: check that the BlockResponse matches our request
+
 	err := s.validateBlock(b)
 	return err
 }

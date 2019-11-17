@@ -18,6 +18,7 @@ package p2p
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 
@@ -36,7 +37,7 @@ type Service struct {
 	host *host
 
 	msgSendChan      chan<- []byte
-	msgRecChan       <-chan BlockAnnounceMessage
+	msgRecChan       <-chan []byte
 	blockReqRec      map[string]bool
 	blockRespRec     map[string]bool
 	blockAnnounceRec map[string]bool
@@ -44,7 +45,7 @@ type Service struct {
 }
 
 // NewService creates a new p2p.Service using the service config. It initializes the host and dht
-func NewService(conf *Config, msgSendChan chan<- []byte, msgRecChan <-chan BlockAnnounceMessage) (*Service, error) {
+func NewService(conf *Config, msgSendChan chan<- []byte, msgRecChan <-chan []byte) (*Service, error) {
 	ctx := context.Background()
 	h, err := newHost(ctx, conf)
 	if err != nil {
@@ -102,13 +103,25 @@ func (s *Service) Stop() error {
 // MsgRecPoll starts polling the msgRecChan channel for any blocks
 func (s *Service) MsgRecPoll(e chan error) {
 	for {
-		// Receives block from babe
-		blockAnnounceMsg := <-s.msgRecChan
-		msg := s.host.hostAddr.String() + " received block"
-		log.Info(msg, "block", blockAnnounceMsg)
+		// Receive block
+		b := <- s.msgRecChan
 
-		// Broadcast the received message
-		err := s.Broadcast(&blockAnnounceMsg)
+		// Log host address and received block
+		h := s.host.hostAddr.String() + " received block"
+		log.Info(h, "block", b)
+
+		// Write block to buffer
+		rdw := new(bytes.Buffer)
+		rdw.Write(b)
+
+		// Decode block message
+		msg, err := DecodeMessage(rdw)
+		if err != nil {
+			e <- err
+		}
+
+		// Broadcast block message
+		err = s.Broadcast(msg)
 		if err != nil {
 			e <- err
 			break

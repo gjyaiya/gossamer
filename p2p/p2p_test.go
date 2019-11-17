@@ -34,7 +34,7 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
-func startNewService(t *testing.T, cfg *Config, msgSendChan chan []byte, msgRecChan chan BlockAnnounceMessage) *Service {
+func startNewService(t *testing.T, cfg *Config, msgSendChan chan []byte, msgRecChan chan []byte) *Service {
 	node, err := NewService(cfg, msgSendChan, msgRecChan)
 	if err != nil {
 		t.Fatal(err)
@@ -398,7 +398,7 @@ func TestP2pReceiveChan(t *testing.T) {
 		RandSeed:       1,
 	}
 
-	msgRecChan := make(chan BlockAnnounceMessage)
+	msgRecChan := make(chan []byte)
 
 	nodeA := startNewService(t, testServiceConfigA, nil, msgRecChan)
 	defer nodeA.Stop()
@@ -440,7 +440,7 @@ func TestP2pReceiveChan(t *testing.T) {
 	}
 
 	// Send message down the nodeA receive channel
-	msgRecChan <- blockAnnounceMsg
+	msgRecChan <- encodedBlockAnnounceMsg
 
 	// Check that we receive the same message in nodeB
 	select {
